@@ -1,9 +1,10 @@
+#!/usr/bin/env python
+
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-import base64
 import sys
 import tempfile
 
@@ -11,25 +12,22 @@ from optparse import OptionParser
 import os, subprocess
 
 if len(sys.argv)<2:
-    from PyQt6.QtWidgets import (
-    QApplication, QWidget, QGridLayout, QLabel, QComboBox,
-    QLineEdit, QSpinBox, QPushButton, QMessageBox
-    )
-    from PyQt6.QtGui import QColor
+    from PyQt4.QtGui import *
+    from PyQt4.QtCore import *
 
 def parse_range(astr):
     result=set()
     for part in astr.split(','):
         x=part.split('-')
-        result.update(list(range(int(x[0]),int(x[-1])+1)))
+        result.update(range(int(x[0]),int(x[-1])+1))
     return sorted(result)
 
 def makelabels(stream, gen, labels, off):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
-        tmp_font.write(base64.b64decode(fontdata))
-        tmp_font_path = tmp_font.name
-    pdfmetrics.registerFont(TTFont('3of9', tmp_font_path))
-    os.remove(tmp_font_path)
+    font=open("/tmp/3of9.ttf", "wb")
+    font.write(fontdata.decode("base64"))
+    font.close()
+    pdfmetrics.registerFont(TTFont('3of9', '/tmp/3of9.ttf'))
+    os.remove("/tmp/3of9.ttf")
 
     can=Canvas(stream, pagesize=letter)
     width, height=letter
@@ -97,7 +95,7 @@ def gobutton():
     except:
         QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
         return
-    print(labels)
+    print labels
     if len(labels)>(32-off):
         QMessageBox.critical(gui, 'PyLTO', "Number Range Too Long (max 32)")
         return
@@ -122,7 +120,7 @@ def main():
         global numbers
         global offset
         app = QApplication(sys.argv)
-        gui = QWidget()
+        gui = QWidget();
         gui.setWindowTitle("PyLTO")
         layout = QGridLayout(gui)
         genlabel = QLabel("Generation", gui)
@@ -145,7 +143,7 @@ def main():
         button.clicked.connect(gobutton)
         layout.addWidget(button, 3, 0, 1, 2)
         gui.show()
-        return app.exec()
+        return app.exec_()
     else:
         parser=OptionParser(usage="%prog [options] numbers (e.g. 1-5,6,7,8 9-12)\nRun without options to launch UI (you'll need the pyqt4 libraries)")
         parser.add_option("-g", "--generation", dest="generation",
