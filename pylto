@@ -31,11 +31,11 @@ def makelabels(stream, gen, labels, off):
     pdfmetrics.registerFont(TTFont('3of9', tmp_font_path))
     os.remove(tmp_font_path)
 
-    can=Canvas(stream, pagesize=letter)
+    canvas=Canvas(stream, pagesize=letter)
     width, height=letter
 
-    LABEL_WIDTH=3*72
-    LABEL_HEIGHT=(5*72)/8
+    LABEL_WIDTH=3 * 72 # 3 inches
+    LABEL_HEIGHT=(5 * 72) / 8 # 5/8 inch
     CHAR_WIDTH=25
     CHAR_HEIGHT=13
     NUMBER_OFFSET=20
@@ -46,44 +46,52 @@ def makelabels(stream, gen, labels, off):
     VERT_SPACING=0
     MARGIN=2
     
-    cols="red", "yellow", "lightgreen", "lightblue", "grey", "orange", "hotpink", "darkgreen", "darkorange", "purple"
+    colors="red", "yellow", "lightgreen", "lightblue", "grey", "orange", "hotpink", "darkgreen", "darkorange", "purple"
 
-    can.setFont("Helvetica", 10)
-    can.setFillColor("black")
-    can.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577 using a good quality printer")
-    can.setFillColor("blue")
-    can.drawString(165, height-30, "Generated using PyLTO from MaNic Software")
-    can.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
-    can.setFillColor("black")
+    canvas.setFont("Helvetica", 10)
+    canvas.setFillColor("black")
+    canvas.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577 using a good quality printer")
+    canvas.setFillColor("blue")
+    canvas.drawString(165, height-30, "Generated using PyLTO from MaNic Software")
+    canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
+    canvas.setFillColor("black")
     for i in range(len(labels)):
-        n=i+off
-        h=(n%2)*(LABEL_WIDTH+HORIZ_SPACING)+LEFT_OFFSET
-        v=height-LABEL_HEIGHT-(n/2)*(LABEL_HEIGHT+VERT_SPACING)-TOP_OFFSET
-        barcode="*{0:06d}L{1}*".format(int(labels[i]), gen)
-        can.setFont("3of9", 42)
-        can.scale(-1.0, 1.0)
-        can.drawString(-(h+LABEL_WIDTH-BARCODE_OFFSET), v+MARGIN, barcode)
-        can.scale(-1.0, 1.0)
-        chars="{0:06d}".format(int(labels[i]))
-        genchars="L"+str(gen)
-        c=0
-        can.setFont("Helvetica-Bold", 13)
-        for char in chars:
-            can.setFillColor(cols[int(char)])
-            can.rect(h+c*CHAR_WIDTH+NUMBER_OFFSET, v+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
-            can.setFillColor("black")
-            can.drawString(h+c*CHAR_WIDTH+7+NUMBER_OFFSET, v+2+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, char)
-            c+=1
-            
-        can.setFont("Helvetica-Bold", 9)
-        can.setFillColor("white")
-        can.rect(h+c*CHAR_WIDTH+NUMBER_OFFSET, v+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
-        can.setFillColor("black")
-        can.drawString(h+c*CHAR_WIDTH+6+NUMBER_OFFSET, v+3+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, genchars)
-        
-    can.showPage()
-    can.save()
+        label_index=i+off
+        x_pos = (label_index % 2) * (LABEL_WIDTH + HORIZ_SPACING) + LEFT_OFFSET
+        y_pos = height - LABEL_HEIGHT - (label_index / 2) * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
 
+        # Draw barcode
+        barcode="*{0:06d}L{1}*".format(int(labels[i]), gen)
+        canvas.setFont("3of9", 42)
+        canvas.scale(-1.0, 1.0)
+        canvas.drawString(-(x_pos+LABEL_WIDTH-BARCODE_OFFSET), y_pos+MARGIN, barcode)
+        canvas.scale(-1.0, 1.0)
+
+
+        label_number="{0:06d}".format(int(labels[i]))
+        gen_label="L"+str(gen)
+        digit_index=0
+        canvas.setFont("Helvetica-Bold", 13)
+        for char in label_number:
+            canvas.setFillColor(colors[int(char)])
+            canvas.rect(x_pos+digit_index*CHAR_WIDTH+NUMBER_OFFSET, y_pos+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
+            canvas.setFillColor("black")
+            canvas.drawString(x_pos+digit_index*CHAR_WIDTH+7+NUMBER_OFFSET, y_pos+2+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, char)
+            digit_index += 1
+            
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.setFillColor("white")
+        canvas.rect(x_pos+digit_index*CHAR_WIDTH+NUMBER_OFFSET, y_pos+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
+        canvas.setFillColor("black")
+        canvas.drawString(x_pos+digit_index*CHAR_WIDTH+6+NUMBER_OFFSET, y_pos+3+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, gen_label)
+        
+    canvas.showPage()
+    canvas.save()
+
+
+'''
+Execute when Go button pressed
+'''
 def gobutton():
     global gui
     global gen
@@ -103,7 +111,7 @@ def gobutton():
         return
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
-    file=open(tmpfilename, 'w')
+    file=open(tmpfilename, 'wb')
     makelabels(file, int(gen.currentText()), labels, off)
     file.close()
 
@@ -121,23 +129,30 @@ def main():
         global gen
         global numbers
         global offset
+
+        ### Setup GUI
         app = QApplication(sys.argv)
         gui = QWidget()
         gui.setWindowTitle("PyLTO")
         layout = QGridLayout(gui)
         genlabel = QLabel("Generation", gui)
         layout.addWidget(genlabel, 0, 0)
+        
         gen = QComboBox(gui)
         for i in range(10):
             gen.addItem(str(i+1))
         gen.setCurrentIndex(3)
         layout.addWidget(gen, 0, 1)
+
         numlabel = QLabel("Numbers", gui)
         layout.addWidget(numlabel, 1, 0)
+
         numbers=QLineEdit(gui)
         layout.addWidget(numbers, 1, 1)
+
         offlabel = QLabel("Offset", gui)
         layout.addWidget(offlabel, 2, 0)
+
         offset = QSpinBox(gui)
         offset.setRange(0, 31)
         layout.addWidget(offset, 2, 1)
