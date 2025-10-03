@@ -55,10 +55,17 @@ def makelabels(stream, gen, labels, off):
     canvas.drawString(165, height-30, "Generated using PyLTO from MaNic Software")
     canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
     canvas.setFillColor("black")
-    for i in range(len(labels)):
-        label_index=i+off
-        x_pos = (label_index % 2) * (LABEL_WIDTH + HORIZ_SPACING) + LEFT_OFFSET
-        y_pos = height - LABEL_HEIGHT - (label_index / 2) * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
+
+    labels_per_column = len(labels) // 2 + len(labels) % 2  # handle odd number of labels. 
+                                                            # len // 2 gets the number of labels in the first column (2 for 2 column), len % 2 adds one if odd number of labels
+    for i, label_number in enumerate(labels):
+        column = 0 if i < labels_per_column else 1
+        row = i % labels_per_column
+
+        # Calculate position
+        # We multiply the column by the label width + spacing to get the x position.
+        x_pos = column * (LABEL_WIDTH + HORIZ_SPACING) + LEFT_OFFSET
+        y_pos = height - LABEL_HEIGHT - row * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
 
         # Draw barcode
         barcode="*{0:06d}L{1}*".format(int(labels[i]), gen)
