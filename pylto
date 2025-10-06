@@ -56,41 +56,63 @@ def makelabels(stream, gen, labels, off):
     #canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
     canvas.setFillColor("black")
 
-    labels_per_column = len(labels) // 2 + len(labels) % 2  # handle odd number of labels. 
-                                                            # len // 2 gets the number of labels in the first column (2 for 2 column), len % 2 adds one if odd number of labels
-    for i, label_number in enumerate(labels):
-        column = 0 if i < labels_per_column else 1
-        row = i % labels_per_column
+    labels_per_page = 32
+    total_labels = len(labels)
+    current_index = 0
 
-        # Calculate position
-        # We multiply the column by the label width + spacing to get the x position.
-        x_pos = column * (LABEL_WIDTH + HORIZ_SPACING) + LEFT_OFFSET
-        y_pos = height - LABEL_HEIGHT - row * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
+    while current_index < total_labels:
+        # Select 32 labels for the current page
+        page_labels = labels[current_index:current_index + labels_per_page]
+        page_offset = off if current_index == 0 else 0
 
-        # Draw barcode
-        barcode="*{0:06d}L{1}*".format(int(labels[i]), gen)
-        canvas.setFont("3of9", 42)
-        canvas.scale(-1.0, 1.0)
-        canvas.drawString(-(x_pos+LABEL_WIDTH-BARCODE_OFFSET), y_pos+MARGIN, barcode)
-        canvas.scale(-1.0, 1.0)
+        for i, label_number in enumerate(page_labels):
+            label_index = i + page_offset
 
+            if label_index >= 32:
+                continue  # skip labels that fall off the page due to offset
 
-        label_number="{0:06d}".format(int(labels[i]))
-        gen_label="L"+str(gen)
-        digit_index=0
-        canvas.setFont("Helvetica-Bold", 13)
-        for char in label_number:
-            canvas.setFillColor(colors[int(char)])
-            canvas.rect(x_pos+digit_index*CHAR_WIDTH+NUMBER_OFFSET, y_pos+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
+            column = label_index // 16  # 0 or 1
+            row = label_index % 16
+
+            x_pos = column * (LABEL_WIDTH + HORIZ_SPACING) + LEFT_OFFSET
+            y_pos = height - LABEL_HEIGHT - row * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
+
+            # Draw barcode
+            barcode = "*{0:06d}L{1}*".format(int(label_number), gen)
+            canvas.setFont("3of9", 42)
+            canvas.scale(-1.0, 1.0)
+            canvas.drawString(-(x_pos + LABEL_WIDTH - BARCODE_OFFSET), y_pos + MARGIN, barcode)
+            canvas.scale(-1.0, 1.0)
+
+            # Draw colored number boxes
+            label_str = "{0:06d}".format(int(label_number))
+            gen_label = "L" + str(gen)
+            canvas.setFont("Helvetica-Bold", 13)
+
+            for digit_index, char in enumerate(label_str):
+                canvas.setFillColor(colors[int(char)])
+                canvas.rect(x_pos + digit_index * CHAR_WIDTH + NUMBER_OFFSET,
+                            y_pos + LABEL_HEIGHT - CHAR_HEIGHT - MARGIN,
+                            CHAR_WIDTH, CHAR_HEIGHT, fill=1)
+                canvas.setFillColor("black")
+                canvas.drawString(x_pos + digit_index * CHAR_WIDTH + 7 + NUMBER_OFFSET,
+                                  y_pos + 2 + LABEL_HEIGHT - CHAR_HEIGHT - MARGIN,
+                                  char)
+
+            # Draw generation box
+            canvas.setFont("Helvetica-Bold", 9)
+            canvas.setFillColor("white")
+            canvas.rect(x_pos + digit_index * CHAR_WIDTH + CHAR_WIDTH + NUMBER_OFFSET,
+                        y_pos + LABEL_HEIGHT - CHAR_HEIGHT - MARGIN,
+                        CHAR_WIDTH, CHAR_HEIGHT, fill=1)
             canvas.setFillColor("black")
-            canvas.drawString(x_pos+digit_index*CHAR_WIDTH+7+NUMBER_OFFSET, y_pos+2+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, char)
-            digit_index += 1
-            
-        canvas.setFont("Helvetica-Bold", 9)
-        canvas.setFillColor("white")
-        canvas.rect(x_pos+digit_index*CHAR_WIDTH+NUMBER_OFFSET, y_pos+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, CHAR_WIDTH, CHAR_HEIGHT, fill=1)
-        canvas.setFillColor("black")
-        canvas.drawString(x_pos+digit_index*CHAR_WIDTH+6+NUMBER_OFFSET, y_pos+3+LABEL_HEIGHT-CHAR_HEIGHT-MARGIN, gen_label)
+            canvas.drawString(x_pos + digit_index * CHAR_WIDTH + CHAR_WIDTH + 6 + NUMBER_OFFSET,
+                              y_pos + 3 + LABEL_HEIGHT - CHAR_HEIGHT - MARGIN,
+                              gen_label)
+
+        canvas.showPage()
+        # Move to the next set of 32 labels, loop will exit if no more labels
+        current_index += labels_per_page - (off if current_index == 0 else 0)
         
     canvas.showPage()
     canvas.save()
@@ -112,9 +134,6 @@ def gobutton():
         QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
         return
     print(labels)
-    if len(labels)>(32-offset.value()):
-        QMessageBox.critical(gui, 'PyLTO', "Number Range Too Long (max 32)")
-        return
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
     file=open(tmpfilename, 'wb')
