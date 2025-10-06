@@ -34,26 +34,26 @@ def makelabels(stream, gen, labels, off):
     canvas=Canvas(stream, pagesize=letter)
     width, height=letter
 
-    LABEL_WIDTH=3 * 72 # 3 inches
-    LABEL_HEIGHT=(5 * 72) / 8 # 5/8 inch
-    CHAR_WIDTH=25
-    CHAR_HEIGHT=13
-    NUMBER_OFFSET=20
-    BARCODE_OFFSET=30 #from right
-    TOP_OFFSET=50
-    LEFT_OFFSET=50
-    HORIZ_SPACING=50
-    VERT_SPACING=0
+    LABEL_WIDTH = 3 * 72 # 3 inches
+    LABEL_HEIGHT = (5 * 72) / 8 # 5/8 inch
+    CHAR_WIDTH = 25
+    CHAR_HEIGHT = 13
+    NUMBER_OFFSET = 20
+    BARCODE_OFFSET = 30 #from right
+    TOP_OFFSET= (72 / 2) + 4  # 0.5 inch plus some padding due to printer issues
+    LEFT_OFFSET= 50
+    HORIZ_SPACING = 72
+    VERT_SPACING = 0
     MARGIN=2
     
     colors="red", "yellow", "lightgreen", "lightblue", "grey", "orange", "hotpink", "darkgreen", "darkorange", "purple"
 
     canvas.setFont("Helvetica", 10)
     canvas.setFillColor("black")
-    canvas.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577 using a good quality printer")
+    canvas.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577")
     canvas.setFillColor("blue")
-    canvas.drawString(165, height-30, "Generated using PyLTO from MaNic Software")
-    canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
+    canvas.drawString(165, height-30, "Generated using PyLTO")
+    #canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
     canvas.setFillColor("black")
 
     labels_per_column = len(labels) // 2 + len(labels) % 2  # handle odd number of labels. 
@@ -105,7 +105,6 @@ def gobutton():
     global numbers
     global offset
 
-    off=offset.value()
     numlist=str(numbers.displayText()).split(" ")
     try:
         labels=parse_range(",".join(numlist))
@@ -113,13 +112,13 @@ def gobutton():
         QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
         return
     print(labels)
-    if len(labels)>(32-off):
+    if len(labels)>(32-offset.value()):
         QMessageBox.critical(gui, 'PyLTO', "Number Range Too Long (max 32)")
         return
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
     file=open(tmpfilename, 'wb')
-    makelabels(file, int(gen.currentText()), labels, off)
+    makelabels(file, int(gen.currentText()), labels, offset.value())
     file.close()
 
     if sys.platform.startswith('darwin'):
