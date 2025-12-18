@@ -9,6 +9,7 @@ import tempfile
 
 from optparse import OptionParser
 import os, subprocess
+from PyQt6.QtGui import QColor
 
 if len(sys.argv)<2:
     from PyQt6.QtWidgets import (
@@ -16,13 +17,25 @@ if len(sys.argv)<2:
     QLineEdit, QSpinBox, QPushButton, QMessageBox
     )
     from PyQt6.QtGui import QColor
+    #from PyQt6.QtCore import 
 
-def parse_range(astr):
-    result=set()
+def parse_range(astr, prefix=""):
+    result = []
+    width = 6 - len(prefix)
+
+    if width <= 0:
+        raise ValueError("Prefix length must be less than 6")
+
     for part in astr.split(','):
-        x=part.split('-')
-        result.update(list(range(int(x[0]),int(x[-1])+1)))
-    return sorted(result)
+        start, end = map(int, part.split('-'))
+        for i in range(start, end + 1):
+            num = str(i)
+            if len(num) > width:
+                raise ValueError(f"Number '{i}' exceeds available width")
+            s = f"{prefix}{num.zfill(width)}"
+            result.append(s)
+
+    return result
 
 def makelabels(stream, gen, labels, off):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
@@ -78,19 +91,24 @@ def makelabels(stream, gen, labels, off):
             y_pos = height - LABEL_HEIGHT - row * (LABEL_HEIGHT + VERT_SPACING) - TOP_OFFSET
 
             # Draw barcode
-            barcode = "*{0:06d}L{1}*".format(int(label_number), gen)
+            #barcode = "*{0:06d}L{1}*".format(int(label_number), gen)
+            barcode = "*{0:06}L{1}*".format(label_number, gen)
             canvas.setFont("3of9", 42)
             canvas.scale(-1.0, 1.0)
             canvas.drawString(-(x_pos + LABEL_WIDTH - BARCODE_OFFSET), y_pos + MARGIN, barcode)
             canvas.scale(-1.0, 1.0)
 
             # Draw colored number boxes
-            label_str = "{0:06d}".format(int(label_number))
+            #label_str = "{0:06d}".format(int(label_number))
+            label_str = "{0:06}".format(label_number)
             gen_label = "L" + str(gen)
             canvas.setFont("Helvetica-Bold", 13)
 
             for digit_index, char in enumerate(label_str):
-                canvas.setFillColor(colors[int(char)])
+                if not char.isdigit():
+                    canvas.setFillColor("white")
+                else:
+                    canvas.setFillColor(colors[int(char)])
                 canvas.rect(x_pos + digit_index * CHAR_WIDTH + NUMBER_OFFSET,
                             y_pos + LABEL_HEIGHT - CHAR_HEIGHT - MARGIN,
                             CHAR_WIDTH, CHAR_HEIGHT, fill=1)
@@ -129,11 +147,12 @@ def gobutton():
 
     numlist=str(numbers.displayText()).split(" ")
     try:
-        labels=parse_range(",".join(numlist))
+        labels=parse_range(",".join(numlist), prefix.text())
     except:
         QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
         return
     print(labels)
+    print(prefix.text())
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
     file=open(tmpfilename, 'wb')
@@ -154,13 +173,14 @@ def main():
         global gen
         global numbers
         global offset
+        global prefix
 
         ### Setup GUI
         app = QApplication(sys.argv)
         gui = QWidget()
         gui.setWindowTitle("PyLTO")
         layout = QGridLayout(gui)
-        genlabel = QLabel("Generation", gui)
+        genlabel = QLabel("LTOGeneration", gui)
         layout.addWidget(genlabel, 0, 0)
         
         gen = QComboBox(gui)
@@ -169,21 +189,28 @@ def main():
         gen.setCurrentIndex(3)
         layout.addWidget(gen, 0, 1)
 
+        prefixlabel = QLabel("Prefix", gui)
+        layout.addWidget(prefixlabel, 1, 0)
+        prefix = QLineEdit("", gui)
+        prefix.setPlaceholderText("e.g. LTO")
+        print(prefix.text())
+        layout.addWidget(prefix, 1, 1)
+
         numlabel = QLabel("Numbers", gui)
-        layout.addWidget(numlabel, 1, 0)
+        layout.addWidget(numlabel, 2, 0)
 
         numbers=QLineEdit(gui)
-        layout.addWidget(numbers, 1, 1)
+        layout.addWidget(numbers, 2, 1)
 
         offlabel = QLabel("Offset", gui)
-        layout.addWidget(offlabel, 2, 0)
+        layout.addWidget(offlabel, 3, 0)
 
         offset = QSpinBox(gui)
         offset.setRange(0, 31)
-        layout.addWidget(offset, 2, 1)
+        layout.addWidget(offset, 3, 1)
         button = QPushButton("Go", gui)
         button.clicked.connect(gobutton)
-        layout.addWidget(button, 3, 0, 1, 2)
+        layout.addWidget(button, 4, 0, 1, 2)
         gui.show()
         return app.exec()
     else:
