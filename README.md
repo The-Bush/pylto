@@ -6,8 +6,19 @@ Forked from: https://github.com/manic-software/pylto
 
 # Usage
 Run the executable located at `./dist/pylto.exe` to open the GUI
+Fields:
+(REQUIRED) LTOGeneration [1-10]
+(OPTIONAL) Prefix
+  - The prefix that will precede every number in the sequence.
+  - ex. LTO
+(REQUIRED) Numbers
+  - The range of numbers to generate labels for.
+  - ex. 1-100
+(REQUIRED) Offset [>=0]
+  - The number of labels to skip before starting to print
 
-Command line arguments are currently deprecated in favor of the GUI.
+
+NOTE: Command line arguments are currently deprecated in favor of the GUI.
 
 # Dev
 While developing, use `poetry` to manage dependencies and for testing. Test by executing:
