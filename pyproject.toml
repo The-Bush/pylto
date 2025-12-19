@@ -6,10 +6,11 @@ authors = [
     {name = "Brandon Demelo"}
 ]
 readme = "README.md"
-requires-python = ">=3.13,<4"
+requires-python = ">=3.13,<3.15"
 dependencies = [
     "reportlab (>=4.4.4,<5.0.0)",
-    "pyqt6 (>=6.9.1,<7.0.0)"
+    "pyqt6 (>=6.9.1,<7.0.0)",
+    "pyinstaller (>=6.17.0,<7.0.0)"
 ]
 
 [dependency-groups]

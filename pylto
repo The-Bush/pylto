@@ -11,6 +11,8 @@ from optparse import OptionParser
 import os, subprocess
 from PyQt6.QtGui import QColor
 
+attribution = False
+
 if len(sys.argv)<2:
     from PyQt6.QtWidgets import (
     QApplication, QWidget, QGridLayout, QLabel, QComboBox,
@@ -59,14 +61,15 @@ def makelabels(stream, gen, labels, off):
     VERT_SPACING = 0
     MARGIN=2
     
-    colors="red", "yellow", "lightgreen", "lightblue", "grey", "orange", "hotpink", "darkgreen", "darkorange", "purple"
+    colors="red", "yellow", "lightgreen", "lightblue", "grey", "orange", "hotpink", "chartreuse", "darkorange", "magenta"
 
     canvas.setFont("Helvetica", 10)
     canvas.setFillColor("black")
-    canvas.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577")
-    canvas.setFillColor("blue")
-    canvas.drawString(165, height-30, "Generated using PyLTO")
-    #canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
+    if attribution:
+        canvas.drawString(125, height-15, "Print at 100% scale onto Avery labels 6577")
+        canvas.setFillColor("blue")
+        canvas.drawString(165, height-30, "Generated using PyLTO")
+        #canvas.linkURL("http://www.manicsoftware.co.uk", (150, height-40, width-150, height-10))
     canvas.setFillColor("black")
 
     labels_per_page = 32
