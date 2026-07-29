@@ -95,7 +95,10 @@ def makelabels(stream, gen, labels, off):
 
             # Draw barcode
             #barcode = "*{0:06d}L{1}*".format(int(label_number), gen)
-            barcode = "*{0:06}L{1}*".format(label_number, gen)
+            if gen == "CU":
+                barcode = "*{0:06}CU*".format(label_number)
+            else:
+                barcode = "*{0:06}L{1}*".format(label_number, gen)
             canvas.setFont("3of9", 42)
             canvas.scale(-1.0, 1.0)
             canvas.drawString(-(x_pos + LABEL_WIDTH - BARCODE_OFFSET), y_pos + MARGIN, barcode)
@@ -104,7 +107,10 @@ def makelabels(stream, gen, labels, off):
             # Draw colored number boxes
             #label_str = "{0:06d}".format(int(label_number))
             label_str = "{0:06}".format(label_number)
-            gen_label = "L" + str(gen)
+            if gen == "CU":
+                gen_label = "CU"
+            else:
+                gen_label = "L" + str(gen)
             canvas.setFont("Helvetica-Bold", 13)
 
             for digit_index, char in enumerate(label_str):
@@ -159,7 +165,7 @@ def gobutton():
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
     file=open(tmpfilename, 'wb')
-    makelabels(file, int(gen.currentText()), labels, offset.value())
+    makelabels(file, gen.currentText(), labels, offset.value())
     file.close()
 
     if sys.platform.startswith('darwin'):
@@ -189,6 +195,7 @@ def main():
         gen = QComboBox(gui)
         for i in range(10):
             gen.addItem(str(i+1))
+        gen.addItem(str("CU"))
         gen.setCurrentIndex(3)
         layout.addWidget(gen, 0, 1)
 
