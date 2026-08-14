@@ -4,6 +4,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 import base64
+import re
 import sys
 import tempfile
 
@@ -16,10 +17,11 @@ attribution = False
 if len(sys.argv)<2:
     from PyQt6.QtWidgets import (
     QApplication, QWidget, QGridLayout, QLabel, QComboBox,
-    QLineEdit, QSpinBox, QPushButton, QMessageBox
+    QLineEdit, QSpinBox, QPushButton, QMessageBox,
+    QPlainTextEdit, QRadioButton, QButtonGroup
     )
     from PyQt6.QtGui import QColor
-    #from PyQt6.QtCore import 
+    #from PyQt6.QtCore import
 
 def parse_range(astr, prefix=""):
     result = []
@@ -39,7 +41,31 @@ def parse_range(astr, prefix=""):
 
     return result
 
-def makelabels(stream, gen, labels, off):
+# Characters the embedded "3 of 9" barcode font can render.
+CODE39_CHARS = set("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%")
+# Max characters that fit as colored boxes across a single label, matching the
+# 6-character field range mode uses. The generation box is drawn after these.
+MAX_RAW_LABEL_CHARS = 6
+
+def parse_list(astr):
+    result = []
+
+    for part in re.split(r'[,\n]+', astr):
+        entry = part.strip().upper()
+        if not entry:
+            continue
+        if len(entry) > MAX_RAW_LABEL_CHARS:
+            raise ValueError(f"Entry '{entry}' exceeds {MAX_RAW_LABEL_CHARS} characters")
+        if not all(c in CODE39_CHARS for c in entry):
+            raise ValueError(f"Entry '{entry}' has unsupported characters")
+        result.append(entry)
+
+    if not result:
+        raise ValueError("No labels provided")
+
+    return result
+
+def makelabels(stream, gen, labels, off, raw_mode=False):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".ttf") as tmp_font:
         tmp_font.write(base64.b64decode(fontdata))
         tmp_font_path = tmp_font.name
@@ -95,10 +121,14 @@ def makelabels(stream, gen, labels, off):
 
             # Draw barcode
             #barcode = "*{0:06d}L{1}*".format(int(label_number), gen)
-            if gen == "CU":
-                barcode = "*{0:06}CU*".format(label_number)
+            # raw_mode uses the entry text as-is; otherwise it's zero-padded to 6.
+            # The generation suffix is appended either way.
+            if raw_mode:
+                label_str = label_number
             else:
-                barcode = "*{0:06}L{1}*".format(label_number, gen)
+                label_str = "{0:06}".format(label_number)
+            gen_label = "CU" if gen == "CU" else "L" + str(gen)
+            barcode = "*{0}{1}*".format(label_str, gen_label)
             canvas.setFont("3of9", 42)
             canvas.scale(-1.0, 1.0)
             canvas.drawString(-(x_pos + LABEL_WIDTH - BARCODE_OFFSET), y_pos + MARGIN, barcode)
@@ -106,11 +136,6 @@ def makelabels(stream, gen, labels, off):
 
             # Draw colored number boxes
             #label_str = "{0:06d}".format(int(label_number))
-            label_str = "{0:06}".format(label_number)
-            if gen == "CU":
-                gen_label = "CU"
-            else:
-                gen_label = "L" + str(gen)
             canvas.setFont("Helvetica-Bold", 13)
 
             for digit_index, char in enumerate(label_str):
@@ -140,8 +165,7 @@ def makelabels(stream, gen, labels, off):
         canvas.showPage()
         # Move to the next set of 32 labels, loop will exit if no more labels
         current_index += labels_per_page - (off if current_index == 0 else 0)
-        
-    canvas.showPage()
+
     canvas.save()
 
 
@@ -153,19 +177,30 @@ def gobutton():
     global gen
     global numbers
     global offset
+    global list_radio
+    global listbox
 
-    numlist=str(numbers.displayText()).split(" ")
-    try:
-        labels=parse_range(",".join(numlist), prefix.text())
-    except:
-        QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
-        return
+    if list_radio.isChecked():
+        try:
+            labels = parse_list(listbox.toPlainText())
+        except:
+            QMessageBox.critical(gui, 'PyLTO', "Label List Invalid")
+            return
+        raw_mode = True
+    else:
+        numlist=str(numbers.displayText()).split(" ")
+        try:
+            labels=parse_range(",".join(numlist), prefix.text())
+        except:
+            QMessageBox.critical(gui, 'PyLTO', "Number Range Invalid")
+            return
+        raw_mode = False
     print(labels)
     print(prefix.text())
 
     _,tmpfilename=tempfile.mkstemp(".pdf")
     file=open(tmpfilename, 'wb')
-    makelabels(file, gen.currentText(), labels, offset.value())
+    makelabels(file, gen.currentText(), labels, offset.value(), raw_mode=raw_mode)
     file.close()
 
     if sys.platform.startswith('darwin'):
@@ -183,44 +218,76 @@ def main():
         global numbers
         global offset
         global prefix
+        global list_radio
+        global listbox
 
         ### Setup GUI
         app = QApplication(sys.argv)
         gui = QWidget()
         gui.setWindowTitle("PyLTO")
         layout = QGridLayout(gui)
+
+        range_radio = QRadioButton("Range", gui)
+        list_radio = QRadioButton("Custom List", gui)
+        range_radio.setChecked(True)
+        mode_group = QButtonGroup(gui)
+        mode_group.addButton(range_radio)
+        mode_group.addButton(list_radio)
+        layout.addWidget(range_radio, 0, 0)
+        layout.addWidget(list_radio, 0, 1)
+
         genlabel = QLabel("LTOGeneration", gui)
-        layout.addWidget(genlabel, 0, 0)
-        
+        layout.addWidget(genlabel, 1, 0)
+
         gen = QComboBox(gui)
         for i in range(10):
             gen.addItem(str(i+1))
         gen.addItem(str("CU"))
         gen.setCurrentIndex(3)
-        layout.addWidget(gen, 0, 1)
+        layout.addWidget(gen, 1, 1)
 
         prefixlabel = QLabel("Prefix", gui)
-        layout.addWidget(prefixlabel, 1, 0)
+        layout.addWidget(prefixlabel, 2, 0)
         prefix = QLineEdit("", gui)
         prefix.setPlaceholderText("e.g. LTO")
         print(prefix.text())
-        layout.addWidget(prefix, 1, 1)
+        layout.addWidget(prefix, 2, 1)
 
         numlabel = QLabel("Numbers", gui)
-        layout.addWidget(numlabel, 2, 0)
+        layout.addWidget(numlabel, 3, 0)
 
         numbers=QLineEdit(gui)
-        layout.addWidget(numbers, 2, 1)
+        layout.addWidget(numbers, 3, 1)
+
+        listlabel = QLabel("Label List", gui)
+        layout.addWidget(listlabel, 2, 0, 2, 1)
+
+        listbox = QPlainTextEdit(gui)
+        listbox.setPlaceholderText("One per line, or comma-separated\ne.g. AB1234, CD5678")
+        layout.addWidget(listbox, 2, 1, 2, 1)
 
         offlabel = QLabel("Offset", gui)
-        layout.addWidget(offlabel, 3, 0)
+        layout.addWidget(offlabel, 4, 0)
 
         offset = QSpinBox(gui)
         offset.setRange(0, 31)
-        layout.addWidget(offset, 3, 1)
+        layout.addWidget(offset, 4, 1)
         button = QPushButton("Go", gui)
         button.clicked.connect(gobutton)
-        layout.addWidget(button, 4, 0, 1, 2)
+        layout.addWidget(button, 5, 0, 1, 2)
+
+        def update_mode():
+            is_list = list_radio.isChecked()
+            prefixlabel.setVisible(not is_list)
+            prefix.setVisible(not is_list)
+            numlabel.setVisible(not is_list)
+            numbers.setVisible(not is_list)
+            listlabel.setVisible(is_list)
+            listbox.setVisible(is_list)
+
+        range_radio.toggled.connect(update_mode)
+        update_mode()
+
         gui.show()
         return app.exec()
     else:
