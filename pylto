@@ -4,6 +4,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 import base64
+import json
 import re
 import sys
 import tempfile
@@ -18,7 +19,7 @@ if len(sys.argv)<2:
     from PyQt6.QtWidgets import (
     QApplication, QWidget, QGridLayout, QLabel, QComboBox,
     QLineEdit, QSpinBox, QPushButton, QMessageBox,
-    QPlainTextEdit, QRadioButton, QButtonGroup
+    QPlainTextEdit, QRadioButton, QButtonGroup, QHBoxLayout
     )
     from PyQt6.QtGui import QColor
     #from PyQt6.QtCore import
@@ -59,6 +60,45 @@ def parse_list(astr):
         if not all(c in CODE39_CHARS for c in entry):
             raise ValueError(f"Entry '{entry}' has unsupported characters")
         result.append(entry)
+
+    if not result:
+        raise ValueError("No labels provided")
+
+    return result
+
+def parse_json(astr, default_gen):
+    """Parse JSON objects (an array, or objects back to back) into (label, gen) tuples.
+    Each object expands start..end; a blank "generation" falls back to default_gen."""
+    decoder = json.JSONDecoder()
+    objs = []
+    pos = 0
+    while True:
+        while pos < len(astr) and astr[pos] in " \t\r\n,":
+            pos += 1
+        if pos >= len(astr):
+            break
+        obj, pos = decoder.raw_decode(astr, pos)
+        objs.extend(obj if isinstance(obj, list) else [obj])
+
+    result = []
+    for obj in objs:
+        start, end = str(obj["start"]).upper(), str(obj["end"]).upper()
+        if len(start) > MAX_RAW_LABEL_CHARS or not all(c in CODE39_CHARS for c in start):
+            raise ValueError(f"Invalid start '{start}'")
+        # Split e.g. "CLN000" into prefix "CLN" and counter "000"
+        m_start = re.fullmatch(r"(.*?)(\d+)", start)
+        m_end = re.fullmatch(r"(.*?)(\d+)", end)
+        if not m_start or not m_end or m_start.group(1) != m_end.group(1):
+            raise ValueError(f"Invalid range '{start}'-'{end}'")
+        pre, width = m_start.group(1), len(m_start.group(2))
+        g = str(obj.get("generation", "")).strip().upper() or default_gen
+        if g != "CU" and not g.isdigit():
+            raise ValueError(f"Invalid generation '{g}'")
+        for i in range(int(m_start.group(2)), int(m_end.group(2)) + 1):
+            num = str(i).zfill(width)
+            if len(num) > width:
+                raise ValueError(f"Number '{i}' exceeds width of '{start}'")
+            result.append((pre + num, g))
 
     if not result:
         raise ValueError("No labels provided")
@@ -109,6 +149,10 @@ def makelabels(stream, gen, labels, off, raw_mode=False):
 
         for i, label_number in enumerate(page_labels):
             label_index = i + page_offset
+            # JSON mode passes (label, generation) tuples to vary generation per label
+            label_gen = gen
+            if isinstance(label_number, tuple):
+                label_number, label_gen = label_number
 
             if label_index >= 32:
                 continue  # skip labels that fall off the page due to offset
@@ -127,7 +171,7 @@ def makelabels(stream, gen, labels, off, raw_mode=False):
                 label_str = label_number
             else:
                 label_str = "{0:06}".format(label_number)
-            gen_label = "CU" if gen == "CU" else "L" + str(gen)
+            gen_label = "CU" if label_gen == "CU" else "L" + str(label_gen)
             barcode = "*{0}{1}*".format(label_str, gen_label)
             canvas.setFont("3of9", 42)
             canvas.scale(-1.0, 1.0)
@@ -179,8 +223,17 @@ def gobutton():
     global offset
     global list_radio
     global listbox
+    global json_radio
+    global jsonbox
 
-    if list_radio.isChecked():
+    if json_radio.isChecked():
+        try:
+            labels = parse_json(jsonbox.toPlainText(), gen.currentText())
+        except Exception as e:
+            QMessageBox.critical(gui, 'PyLTO', f"JSON Invalid: {e}")
+            return
+        raw_mode = True
+    elif list_radio.isChecked():
         try:
             labels = parse_list(listbox.toPlainText())
         except:
@@ -220,6 +273,8 @@ def main():
         global prefix
         global list_radio
         global listbox
+        global json_radio
+        global jsonbox
 
         ### Setup GUI
         app = QApplication(sys.argv)
@@ -229,12 +284,14 @@ def main():
 
         range_radio = QRadioButton("Range", gui)
         list_radio = QRadioButton("Custom List", gui)
+        json_radio = QRadioButton("JSON", gui)
         range_radio.setChecked(True)
         mode_group = QButtonGroup(gui)
-        mode_group.addButton(range_radio)
-        mode_group.addButton(list_radio)
-        layout.addWidget(range_radio, 0, 0)
-        layout.addWidget(list_radio, 0, 1)
+        mode_row = QHBoxLayout()
+        for radio in (range_radio, list_radio, json_radio):
+            mode_group.addButton(radio)
+            mode_row.addWidget(radio)
+        layout.addLayout(mode_row, 0, 0, 1, 2)
 
         genlabel = QLabel("LTOGeneration", gui)
         layout.addWidget(genlabel, 1, 0)
@@ -266,6 +323,13 @@ def main():
         listbox.setPlaceholderText("One per line, or comma-separated\ne.g. AB1234, CD5678")
         layout.addWidget(listbox, 2, 1, 2, 1)
 
+        jsonlabel = QLabel("JSON", gui)
+        layout.addWidget(jsonlabel, 2, 0, 2, 1)
+
+        jsonbox = QPlainTextEdit(gui)
+        jsonbox.setPlaceholderText('[{"start": "000000", "end": "000015", "generation": "9"}, ...]\nBlank generation uses the dropdown')
+        layout.addWidget(jsonbox, 2, 1, 2, 1)
+
         offlabel = QLabel("Offset", gui)
         layout.addWidget(offlabel, 4, 0)
 
@@ -277,15 +341,17 @@ def main():
         layout.addWidget(button, 5, 0, 1, 2)
 
         def update_mode():
-            is_list = list_radio.isChecked()
-            prefixlabel.setVisible(not is_list)
-            prefix.setVisible(not is_list)
-            numlabel.setVisible(not is_list)
-            numbers.setVisible(not is_list)
-            listlabel.setVisible(is_list)
-            listbox.setVisible(is_list)
+            is_range = range_radio.isChecked()
+            prefixlabel.setVisible(is_range)
+            prefix.setVisible(is_range)
+            numlabel.setVisible(is_range)
+            numbers.setVisible(is_range)
+            listlabel.setVisible(list_radio.isChecked())
+            listbox.setVisible(list_radio.isChecked())
+            jsonlabel.setVisible(json_radio.isChecked())
+            jsonbox.setVisible(json_radio.isChecked())
 
-        range_radio.toggled.connect(update_mode)
+        mode_group.buttonToggled.connect(update_mode)
         update_mode()
 
         gui.show()
