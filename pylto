@@ -66,9 +66,9 @@ def parse_list(astr):
 
     return result
 
-def parse_json(astr, default_gen):
+def parse_json(astr):
     """Parse JSON objects (an array, or objects back to back) into (label, gen) tuples.
-    Each object expands start..end; a blank "generation" falls back to default_gen."""
+    Each object expands start..end; each needs its own "generation"."""
     decoder = json.JSONDecoder()
     objs = []
     pos = 0
@@ -94,7 +94,7 @@ def parse_json(astr, default_gen):
         if not m_start or not m_end or m_start.group(1) != m_end.group(1):
             raise ValueError(f"Invalid range '{start}'-'{end}'")
         pre, width = m_start.group(1), len(m_start.group(2))
-        g = str(obj.get("generation", "")).strip().upper() or default_gen
+        g = str(obj.get("generation", "")).strip().upper()
         if g != "CU" and not g.isdigit():
             raise ValueError(f"Invalid generation '{g}'")
         for i in range(int(m_start.group(2)), int(m_end.group(2)) + 1):
@@ -231,7 +231,7 @@ def gobutton():
 
     if json_radio.isChecked():
         try:
-            labels = parse_json(jsonbox.toPlainText(), gen.currentText())
+            labels = parse_json(jsonbox.toPlainText())
         except Exception as e:
             QMessageBox.critical(gui, 'PyLTO', f"JSON Invalid: {e}")
             return
@@ -330,7 +330,7 @@ def main():
         layout.addWidget(jsonlabel, 2, 0, 2, 1)
 
         jsonbox = QPlainTextEdit(gui)
-        jsonbox.setPlaceholderText('[{"start": "000000", "end": "000015", "generation": "9"}, ...]\nBlank generation uses the dropdown')
+        jsonbox.setPlaceholderText('[{"start": "000000", "end": "000015", "generation": "9"}, ...]')
         layout.addWidget(jsonbox, 2, 1, 2, 1)
 
         offlabel = QLabel("Offset", gui)
@@ -345,6 +345,8 @@ def main():
 
         def update_mode():
             is_range = range_radio.isChecked()
+            genlabel.setVisible(not json_radio.isChecked())
+            gen.setVisible(not json_radio.isChecked())
             prefixlabel.setVisible(is_range)
             prefix.setVisible(is_range)
             numlabel.setVisible(is_range)
