@@ -52,14 +52,19 @@ def parse_list(astr):
     result = []
 
     for part in re.split(r'[,\n]+', astr):
-        entry = part.strip().upper()
+        entry = "".join(part.split()).upper()
         if not entry:
             continue
+        # Each entry ends with its generation: L<number> or CU, e.g. AB1234L6
+        m = re.fullmatch(r"(.+)(L\d+|CU)", entry)
+        if not m:
+            raise ValueError(f"Entry '{entry}' must end with L<generation> or CU")
+        entry, g = m.group(1), m.group(2).removeprefix("L")
         if len(entry) > MAX_RAW_LABEL_CHARS:
             raise ValueError(f"Entry '{entry}' exceeds {MAX_RAW_LABEL_CHARS} characters")
         if not all(c in CODE39_CHARS for c in entry):
             raise ValueError(f"Entry '{entry}' has unsupported characters")
-        result.append(entry)
+        result.append((entry, g))
 
     if not result:
         raise ValueError("No labels provided")
@@ -239,8 +244,8 @@ def gobutton():
     elif list_radio.isChecked():
         try:
             labels = parse_list(listbox.toPlainText())
-        except:
-            QMessageBox.critical(gui, 'PyLTO', "Label List Invalid")
+        except Exception as e:
+            QMessageBox.critical(gui, 'PyLTO', f"Label List Invalid: {e}")
             return
         raw_mode = True
     else:
@@ -323,7 +328,7 @@ def main():
         layout.addWidget(listlabel, 2, 0, 2, 1)
 
         listbox = QPlainTextEdit(gui)
-        listbox.setPlaceholderText("One per line, or comma-separated\ne.g. AB1234, CD5678")
+        listbox.setPlaceholderText("One per line, or comma-separated, ending in L<generation> or CU\ne.g. AB1234L6, CLN000CU")
         layout.addWidget(listbox, 2, 1, 2, 1)
 
         jsonlabel = QLabel("JSON", gui)
@@ -345,8 +350,8 @@ def main():
 
         def update_mode():
             is_range = range_radio.isChecked()
-            genlabel.setVisible(not json_radio.isChecked())
-            gen.setVisible(not json_radio.isChecked())
+            genlabel.setVisible(is_range)
+            gen.setVisible(is_range)
             prefixlabel.setVisible(is_range)
             prefix.setVisible(is_range)
             numlabel.setVisible(is_range)
