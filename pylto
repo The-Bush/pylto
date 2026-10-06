@@ -82,6 +82,9 @@ def parse_json(astr, default_gen):
 
     result = []
     for obj in objs:
+        # "import": false means no labels needed for this line (missing = import)
+        if obj.get("import", True) is False:
+            continue
         start, end = str(obj["start"]).upper(), str(obj["end"]).upper()
         if len(start) > MAX_RAW_LABEL_CHARS or not all(c in CODE39_CHARS for c in start):
             raise ValueError(f"Invalid start '{start}'")
